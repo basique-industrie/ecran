@@ -290,14 +290,15 @@ final class SwitcherModel {
               runtime.settings.windowDisplayStyle == .preview,
               runtime.screenRecordingGranted
         else { return }
-        let snapshot = windows
-        previewTask = Task.detached { [weak self] in
-            for window in snapshot where window.windowID != 0 {
+        let ids = windows.map(\.windowID).filter { $0 != 0 }
+        previewTask = Task { [weak self] in
+            for windowID in ids {
                 if Task.isCancelled { return }
-                guard let image = WindowCatalog.previewImage(for: window.windowID) else { continue }
-                await MainActor.run {
-                    self?.previews[window.windowID] = image
-                }
+                let image = await Task.detached {
+                    WindowCatalog.previewImage(for: windowID)
+                }.value
+                guard let image else { continue }
+                self?.previews[windowID] = image
             }
         }
     }
