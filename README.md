@@ -8,10 +8,6 @@
   Switch, snap, and place every window on your Mac.
 </p>
 
-<p align="center">
-  <img src="docs/assets/settings.png" width="680" alt="Ecran Settings, open to the switcher pane">
-</p>
-
 Ecran is a menu-bar window manager and list-only switcher. It combines
 Lineup’s same-app and app switchers with Rectangle’s keyboard placements,
 snap areas, and multi-window arrange actions. There is no Dock icon.
@@ -22,6 +18,37 @@ for macOS 26 (universal).
 [CI](https://github.com/basique-industrie/ecran/actions/workflows/ci.yml)
 · [Releases](https://github.com/basique-industrie/ecran/releases)
 
+## Features
+
+- **Same-app switcher** — `⌘ + \`` lists the front app’s windows, with project
+  names taken from the title
+- **App switcher** — `⌘ + Tab` can replace the system Command-Tab hold
+- **List-only overlay** — arrow keys, Enter, Esc, and 1–9; icon, initials, or
+  live preview rows
+- **Spaces** — windows from every desktop, including minimized Dock windows;
+  stay visible across desktop slides
+- **Keyboard placement** — halves, thirds, fourths, sixths, eighths, ninths,
+  twelfths, and sixteenths; maximize, almost maximize, center, restore, and
+  specified size
+- **Displays** — next and previous display, jump to displays 1–9, treat
+  screens as one canvas, or follow the cursor
+- **Arrange** — tile, cascade, reverse, and a reserved todo sidebar
+- **Drag snap** — edge and corner zones with a footprint, unsnap-on-drag,
+  sixths, thirds cycling, haptics, and a Mission Control guard
+- **Cooperative corners** — the neighboring window fills the leftover band
+- **Window controls** — title-bar double-click to maximize or restore, and an
+  optional green zoom-button override
+- **Ignore an app** — placement shortcuts and snap skip it; the switcher stays
+  live
+- **Shortcuts** — record, clear, and import recommended or Spectacle presets;
+  export and import JSON from Settings
+- **Window titles** — per-app extraction for the switcher list
+- **Menu bar** — launch at login, hide the icon, extra sizes, and URL actions
+  such as `ecran://execute-action?name=left-half`
+
+Recommended shortcuts are ⌃⌥ arrows for halves, ⌃⌥ U/I/J/K for corners, and
+⌃⌥ Return to maximize.
+
 ## Install
 
 1. [Download the latest release](https://github.com/basique-industrie/ecran/releases).
@@ -31,29 +58,6 @@ for macOS 26 (universal).
 The notarized zip is signed. A local `scripts/package.sh` build is **Ecran Dev**:
 a different bundle ID, isolated settings, and a stable local signature so
 Accessibility and Screen Recording survive rebuilds next to `/Applications/Ecran.app`.
-
-## Switcher
-
-- Same-app window switcher (default `⌘ + \``) with project-name extraction
-- App switcher (default `⌘ + Tab`) that can replace the system Command-Tab hold
-- List-only rows, arrow keys, Enter, Esc, and 1–9
-- Windows from every Space, including minimized Dock windows
-- Display styles: app icon, initials, or live preview
-- Double-tap to hold, follow the active display, and stay visible across desktop slides
-
-## Placement
-
-- Halves, thirds, fourths, sixths, eighths, ninths, twelfths, and sixteenths
-- Maximize, almost maximize, center, restore, and specified size
-- Next and previous display, plus jump to displays 1–9
-- Tile, cascade, reverse, and todo-sidebar placements
-- Drag-to-edge snap with a footprint, unsnap-on-drag, sixths, and thirds cycling
-- Ignore an app’s placement shortcuts without disabling the switcher
-- Title-bar double-click and optional green zoom-button override
-- URL actions: `ecran://execute-action?name=left-half`
-
-Recommended shortcuts are ⌃⌥ arrows for halves, ⌃⌥ U/I/J/K for corners, and
-⌃⌥ Return to maximize. Import and export a JSON configuration from Settings.
 
 ## Build from source
 

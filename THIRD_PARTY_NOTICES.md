@@ -26,7 +26,7 @@ MIT License.
 
 ## Generated app artwork
 
-`EcranAppIcon.png` was generated for this project from an original brief
-based on Iles’ dark squircle mark, then packaged as `Ecran.icns`. It contains
-no third-party logo. `docs/assets/app-icon.png` is a 512px export of that same
-mark for the README.
+`EcranAppIcon.png` is a full-bleed mark (dark plate to the canvas edge, three
+window panes, no inner rounded frame). `Ecran.icns` and `docs/assets/app-icon.png`
+are exports of that same artwork. macOS and the README each apply one squircle
+mask. It contains no third-party logo.
