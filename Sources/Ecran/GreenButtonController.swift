@@ -18,10 +18,17 @@ final class GreenButtonController {
             name: .settingsDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsChanged),
+            name: .permissionsDidChange,
+            object: nil
+        )
         refresh()
     }
 
     func stop() {
+        NotificationCenter.default.removeObserver(self)
         stopTap()
     }
 

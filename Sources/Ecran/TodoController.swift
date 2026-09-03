@@ -1,6 +1,5 @@
 import AppKit
 import Domain
-import Foundation
 import Infrastructure
 import WindowGeometry
 

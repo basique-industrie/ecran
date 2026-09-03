@@ -48,6 +48,10 @@ public final class HotkeyCenter: @unchecked Sendable {
         unregisterIDs(Array(refs.keys))
         shortcutIDs.removeAll()
         stopEventTap()
+        if let handler {
+            RemoveEventHandler(handler)
+            self.handler = nil
+        }
     }
 
     public func setAppSwitcherVisible(_ visible: Bool) {

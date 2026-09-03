@@ -16,6 +16,11 @@ public enum MenuBarIdentityIcon {
         monitor?.apply()
     }
 
+    public static func invalidate() {
+        monitor?.invalidate()
+        monitor = nil
+    }
+
     fileprivate static func tinted(_ image: NSImage, color: NSColor) -> NSImage {
         let size = image.size
         guard size.width > 0, size.height > 0 else { return image }
@@ -56,6 +61,19 @@ private final class Monitor {
     private var tintedImages: [ObjectIdentifier: NSImage] = [:]
     private var tokens: [NSObjectProtocol] = []
     private var retry: Task<Void, Never>?
+
+    func invalidate() {
+        retry?.cancel()
+        retry = nil
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        for token in tokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+        tokens.removeAll()
+        observedButtons.removeAll()
+        tintedImages.removeAll()
+    }
 
     func start() {
         tokens.append(

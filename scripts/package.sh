@@ -120,7 +120,10 @@ fi
 
 LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [[ -x "$LSREG" ]]; then
-  "$LSREG" -f "$FINAL_APP" >/dev/null 2>&1 || true
+  "$LSREG" -f -R "$FINAL_APP" >/dev/null 2>&1 || true
+fi
+if [[ "$VARIANT" == "dev" ]]; then
+  killall -u "$(id -un)" iconservicesagent >/dev/null 2>&1 || true
 fi
 
 echo "Packaged $FINAL_APP ($IDENTIFIER)"

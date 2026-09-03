@@ -5,18 +5,24 @@ cd "$(dirname "$0")/.."
 
 CONFIGURATION="debug"
 EXTRA_ARGS=()
+RESET_PERMISSIONS=0
 
 for arg in "$@"; do
   case "$arg" in
     --release) CONFIGURATION="release" ;;
     --open-settings) EXTRA_ARGS+=("--open-settings") ;;
+    --reset-permissions) RESET_PERMISSIONS=1 ;;
     *)
       echo "Unknown argument: $arg" >&2
-      echo "Usage: $0 [--release] [--open-settings]" >&2
+      echo "Usage: $0 [--release] [--open-settings] [--reset-permissions]" >&2
       exit 1
       ;;
   esac
 done
+
+if (( RESET_PERMISSIONS )); then
+  ./scripts/reset-permissions.sh
+fi
 
 CONFIGURATION="$CONFIGURATION" ./scripts/package.sh --dev
 

@@ -36,7 +36,7 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
         }
     }
 
-    var shortcut: KeyEquivalent {
+    var shortcutLabel: String {
         switch self {
         case .general: "1"
         case .switcher: "2"
@@ -47,15 +47,8 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
         }
     }
 
-    var shortcutLabel: String {
-        switch self {
-        case .general: "1"
-        case .switcher: "2"
-        case .shortcuts: "3"
-        case .snap: "4"
-        case .titles: "5"
-        case .about: "6"
-        }
+    var shortcut: KeyEquivalent {
+        KeyEquivalent(Character(shortcutLabel))
     }
 }
 
@@ -176,16 +169,27 @@ struct GeneralSettingsPane: View {
                                 granted: runtime.accessibilityTrusted,
                                 required: true
                             ) {
-                                AccessibilityAuthorization.request()
-                                AccessibilityAuthorization.openSystemSettings()
+                                runtime.grantAccessibility()
                             }
                             SettingsHairline()
                             PermissionRow(
                                 title: "Screen Recording",
                                 granted: runtime.screenRecordingGranted,
-                                required: false
+                                required: false,
+                                needsRelaunch: runtime.screenRecordingNeedsRelaunch
                             ) {
-                                AccessibilityAuthorization.requestScreenRecording()
+                                runtime.grantScreenRecording()
+                            } relaunch: {
+                                AccessibilityAuthorization.relaunch()
+                            }
+                            if AppIdentity.current.isDevelopment {
+                                SettingsHairline()
+                                QuietButton(
+                                    title: "Reset",
+                                    symbol: "arrow.counterclockwise"
+                                ) {
+                                    runtime.resetDevelopmentPermissions()
+                                }
                             }
                         }
                     }
@@ -246,6 +250,11 @@ struct GeneralSettingsPane: View {
                         VStack(spacing: 8) {
                             SettingsToggleRow(title: "Show additional sizes in the menu", isOn: extraSizes)
                             SettingsToggleRow(title: "Halves keep the other axis", isOn: preserveAxis)
+                            SettingsToggleRow(
+                                title: "Confirm URL window actions",
+                                detail: "Prompt before ecran://execute-action places a window. Ignore-list URL tasks always prompt.",
+                                isOn: confirmURLActions
+                            )
                         }
                     }
                 }
@@ -411,6 +420,10 @@ struct GeneralSettingsPane: View {
         Binding(get: { runtime.settings.hideMenuBarIcon }, set: { value in runtime.update { $0.hideMenuBarIcon = value } })
     }
 
+    private var confirmURLActions: Binding<Bool> {
+        Binding(get: { runtime.settings.confirmURLActions }, set: { value in runtime.update { $0.confirmURLActions = value } })
+    }
+
     private var language: Binding<AppLanguage> {
         Binding(get: { runtime.settings.language }, set: { value in
             runtime.update { $0.language = value }
@@ -547,26 +560,11 @@ struct GeneralSettingsPane: View {
     }
 
     private var installedApps: [(String, String)] {
-        NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .compactMap { app in
-                guard let id = app.bundleIdentifier else { return nil }
-                return (id, app.localizedName ?? id)
-            }
-            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+        RunningAppLookup.regularApps().map { ($0.id, $0.name) }
     }
 
     private func appName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-           let bundle = Bundle(url: url) {
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !name.isEmpty {
-                return name
-            }
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !name.isEmpty {
-                return name
-            }
-        }
-        return installedApps.first(where: { $0.0 == bundleID })?.1 ?? bundleID
+        RunningAppLookup.displayName(for: bundleID, fallbackApps: RunningAppLookup.regularApps())
     }
 }
 
@@ -887,13 +885,7 @@ struct ShortcutSettingsPane: View {
     }
 
     private func importConfig() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.urls.first, let data = try? Data(contentsOf: url) else { return }
-        if let imported = try? ConfigImportExport.importSettings(from: data, into: runtime.settings, titlesOnly: false) {
-            runtime.applyImportedSettings(imported)
-        }
+        SettingsImport.run(into: runtime, titlesOnly: false, failureTitle: "Could not import settings")
     }
 }
 
@@ -1118,28 +1110,13 @@ struct TitleSettingsPane: View {
     }
 
     private var runningApps: [(String, String)] {
-        NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .compactMap { app -> (String, String)? in
-                guard let id = app.bundleIdentifier else { return nil }
-                return (id, app.localizedName ?? id)
-            }
-            .sorted { $0.1 < $1.1 }
+        RunningAppLookup.regularApps().map { ($0.id, $0.name) }
     }
 
     private var runningAppIDs: [String] { runningApps.map(\.0) }
 
     private func titleAppName(for bundleID: String) -> String {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-           let bundle = Bundle(url: url) {
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !name.isEmpty {
-                return name
-            }
-            if let name = bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, !name.isEmpty {
-                return name
-            }
-        }
-        return runningApps.first(where: { $0.0 == bundleID })?.1 ?? bundleID
+        RunningAppLookup.displayName(for: bundleID, fallbackApps: RunningAppLookup.regularApps())
     }
 
     @ViewBuilder
@@ -1173,12 +1150,27 @@ struct TitleSettingsPane: View {
     }
 
     private func importTitles() {
+        SettingsImport.run(into: runtime, titlesOnly: true, failureTitle: "Could not import titles")
+    }
+}
+
+@MainActor
+private enum SettingsImport {
+    static func run(into runtime: EcranRuntime, titlesOnly: Bool, failureTitle: String) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.urls.first, let data = try? Data(contentsOf: url) else { return }
-        if let imported = try? ConfigImportExport.importSettings(from: data, into: runtime.settings, titlesOnly: true) {
+        guard panel.runModal() == .OK, let url = panel.urls.first else { return }
+        do {
+            let data = try SettingsFilePolicy.readJSON(at: url)
+            let imported = try ConfigImportExport.importSettings(
+                from: data,
+                into: runtime.settings,
+                titlesOnly: titlesOnly
+            )
             runtime.applyImportedSettings(imported)
+        } catch {
+            SettingsAlert.show(title: failureTitle, message: error.localizedDescription)
         }
     }
 }
@@ -1229,16 +1221,20 @@ struct ShortcutRecorderRow: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
         .onDisappear {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-                self.monitor = nil
-            }
-            recording = false
+            finishRecording()
         }
     }
 
     private var chordLabel: String {
         ShortcutRecorderRow.label(for: runtime.settings.shortcuts[action])
+    }
+
+    private func finishRecording() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        recording = false
     }
 
     private func startRecording() {
@@ -1247,20 +1243,18 @@ struct ShortcutRecorderRow: View {
         }
         recording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-            monitor = nil
             if event.keyCode == 53 {
-                recording = false
+                finishRecording()
                 return nil
             }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue
+            let chord = KeyChord(keyCode: event.keyCode, modifierFlags: flags)
+            guard chord.hasModifier else { return nil }
+            finishRecording()
             runtime.update {
-                $0.shortcuts[action] = KeyChord(keyCode: event.keyCode, modifierFlags: flags)
+                $0.shortcuts[action] = chord
             }
             runtime.persistAndReregisterHotkeys()
-            recording = false
             return nil
         }
     }

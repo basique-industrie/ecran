@@ -22,9 +22,12 @@ Ecran makes no network requests.
 
 ## Permissions
 
-Accessibility permission is requested on first launch and is required to list
-and control windows. Screen Recording is requested only if you choose the live
-preview display style. Launch at Login is opt-in.
+Accessibility is required to list and control windows. Ecran explains it in
+Settings, asks macOS while the app is frontmost, and opens the Accessibility
+pane so you can allow it. Screen Recording is optional and only used for live
+switcher thumbnails; after you allow it mid-session, macOS may require a
+restart. Launch at Login is opt-in. URL ignore-list tasks prompt before they
+change settings. Window-action URLs can optionally prompt from Settings.
 
 The bundled privacy manifest declares File Timestamp required-reason APIs used
 for local settings-file change detection.

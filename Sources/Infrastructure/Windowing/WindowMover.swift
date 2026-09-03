@@ -158,6 +158,14 @@ public final class WindowMover {
         }
         for (index, item) in elements.enumerated() where index < next.count {
             WindowCatalog.setFrame(next[index], of: item.1)
+            let applied = WindowCatalog.frame(of: item.1) ?? next[index]
+            history.record(
+                windowID: item.0.windowID,
+                original: item.2,
+                result: applied,
+                action: action,
+                subAction: nil
+            )
         }
         return true
     }

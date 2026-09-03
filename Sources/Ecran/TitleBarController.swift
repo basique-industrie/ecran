@@ -12,7 +12,7 @@ final class TitleBarController {
     init(runtime: EcranRuntime) {
         self.runtime = runtime
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            Task { @MainActor in
+            MainThreadHop.run {
                 self?.handle(event)
             }
         }

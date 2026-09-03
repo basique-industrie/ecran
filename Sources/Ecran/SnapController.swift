@@ -28,7 +28,7 @@ final class SnapController {
         )
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
             guard self?.gate.enabled == true else { return }
-            Task { @MainActor in
+            MainThreadHop.run {
                 self?.handle(event)
             }
         }
@@ -39,6 +39,7 @@ final class SnapController {
     }
 
     func stop() {
+        NotificationCenter.default.removeObserver(self)
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         globalMonitor = nil

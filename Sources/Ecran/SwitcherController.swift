@@ -30,7 +30,7 @@ final class SwitcherController {
 
     func show(_ kind: SwitcherKind) {
         guard runtime.accessibilityTrusted else {
-            AccessibilityAuthorization.request()
+            runtime.ensureAccessibility()
             runtime.setSwitcherOpen(false)
             return
         }
@@ -143,12 +143,14 @@ final class SwitcherController {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             _ = self?.handle(event, model: model)
         }
-        watchdog = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
             timer.tolerance = 0.02
-            Task { @MainActor in
+            MainThreadHop.run {
                 self?.pollModifiers(model: model)
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        watchdog = timer
     }
 
     private func handle(_ event: NSEvent, model: SwitcherModel) -> NSEvent? {
@@ -288,7 +290,8 @@ final class SwitcherModel {
         previewTask?.cancel()
         guard kind == .sameApp,
               runtime.settings.windowDisplayStyle == .preview,
-              runtime.screenRecordingGranted
+              runtime.screenRecordingGranted,
+              !runtime.screenRecordingNeedsRelaunch
         else { return }
         let ids = windows.map(\.windowID).filter { $0 != 0 }
         previewTask = Task { [weak self] in

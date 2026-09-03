@@ -30,6 +30,7 @@ extension EcranSelfTests {
         test.expectEqual(defaults.switcherVerticalPosition, 0.39, "golden ratio")
         test.expectEqual(defaults.colorScheme, .system, "system color")
         test.expect(defaults.shortcuts[.leftHalf] != nil, "recommended left half shortcut")
+        test.expect(!defaults.confirmURLActions, "URL window actions stay silent by default")
 
         do {
             let json = """
@@ -53,6 +54,112 @@ extension EcranSelfTests {
         let loaded = JSONSettingsStore(fileURL: box.store.fileURL).load()
         test.expectEqual(loaded.gapSize, 12, "persisted gap")
         test.expect(!loaded.showWindowsFromAllSpaces, "persisted Spaces toggle")
+    }
+
+    @MainActor
+    static func runPermissionAuthorizationTests(_ test: TestHarness) {
+        let accessibility = PermissionPane.accessibility.systemSettingsURLs
+        test.expect(accessibility.contains { $0.contains("Privacy_Accessibility") }, "accessibility Settings URL")
+        let recording = PermissionPane.screenRecording.systemSettingsURLs
+        test.expect(recording.contains { $0.contains("Privacy_ScreenCapture") }, "screen recording Settings URL")
+        test.expectEqual(
+            ScreenRecordingAccess.resolve(preflight: false, hadCaptureAtLaunch: false),
+            .notGranted,
+            "missing capture is not granted"
+        )
+        test.expectEqual(
+            ScreenRecordingAccess.resolve(preflight: false, hadCaptureAtLaunch: true),
+            .notGranted,
+            "lost capture is not granted"
+        )
+        test.expectEqual(
+            ScreenRecordingAccess.resolve(preflight: true, hadCaptureAtLaunch: true),
+            .granted,
+            "already granted at launch"
+        )
+        test.expectEqual(
+            ScreenRecordingAccess.resolve(preflight: true, hadCaptureAtLaunch: false),
+            .grantedPendingRelaunch,
+            "grant mid-session needs a relaunch"
+        )
+        test.expectEqual(
+            PermissionPolling.interval(
+                accessibilityTrusted: true,
+                watchingGrant: false,
+                screenRecordingGranted: false,
+                needsRelaunch: false
+            ),
+            PermissionPolling.idle,
+            "optional Screen Recording does not keep a fast poll"
+        )
+        test.expectEqual(
+            PermissionPolling.interval(
+                accessibilityTrusted: false,
+                watchingGrant: false,
+                screenRecordingGranted: false,
+                needsRelaunch: false
+            ),
+            PermissionPolling.fast,
+            "missing Accessibility polls quickly"
+        )
+        test.expectEqual(
+            PermissionPolling.interval(
+                accessibilityTrusted: true,
+                watchingGrant: true,
+                screenRecordingGranted: false,
+                needsRelaunch: false
+            ),
+            PermissionPolling.fast,
+            "Grant flow polls quickly"
+        )
+        test.expect(
+            !PermissionPolling.isWatching(
+                accessibilityTrusted: true,
+                watchingAccessibility: true,
+                screenRecordingReady: false,
+                watchingScreenRecording: false
+            ),
+            "Accessibility-only grant does not keep watching Screen Recording"
+        )
+        test.expect(
+            PermissionPolling.isWatching(
+                accessibilityTrusted: true,
+                watchingAccessibility: false,
+                screenRecordingReady: false,
+                watchingScreenRecording: true
+            ),
+            "Screen Recording grant stays on a fast poll"
+        )
+        test.expect(
+            URLCommandConfirmation.requiresPrompt(
+                .task(.ignoreApp, bundleID: "com.apple.Safari"),
+                confirmActions: false
+            ),
+            "ignore-list URL tasks always prompt"
+        )
+        test.expect(
+            !URLCommandConfirmation.requiresPrompt(.action(.leftHalf), confirmActions: false),
+            "URL window actions stay silent by default"
+        )
+        test.expect(
+            URLCommandConfirmation.requiresPrompt(.action(.leftHalf), confirmActions: true),
+            "URL window actions prompt when enabled"
+        )
+        test.expect(
+            !URLCommandConfirmation.requiresPrompt(.settings, confirmActions: true),
+            "settings URL never prompts"
+        )
+        test.expect(KeyChord.optionControl(123).hasModifier, "recommended chord has a modifier")
+        test.expect(!KeyChord(keyCode: 0, modifierFlags: 0).hasModifier, "bare key is rejected")
+        test.expect(ScreenRecordingAccess.granted.isGranted, "granted is granted")
+        test.expect(ScreenRecordingAccess.grantedPendingRelaunch.needsRelaunch, "pending relaunch")
+        test.expect(!ScreenRecordingAccess.granted.needsRelaunch, "warm grant does not ask to restart")
+        test.expectEqual(AccessibilityAuthorization.shellEscape("Ecran Dev.app"), "'Ecran Dev.app'", "space-safe open path")
+        test.expectEqual(
+            AccessibilityAuthorization.shellEscape("it's"),
+            "'it'\\''s'",
+            "quoted apostrophe"
+        )
     }
 
     @MainActor
@@ -652,6 +759,20 @@ extension EcranSelfTests {
         let attributes = try? FileManager.default.attributesOfItem(atPath: box.store.fileURL.path)
         let permissions = attributes?[.posixPermissions] as? NSNumber
         test.expectEqual(permissions?.intValue ?? 0, 0o600, "settings file is owner-only")
+        test.expect(!SettingsFilePolicy.isWorldWritable(box.store.fileURL), "owner-only file is not world-writable")
+
+        let world = box.directory.appendingPathComponent("world.json")
+        try? Data("{}".utf8).write(to: world)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o666], ofItemAtPath: world.path)
+        test.expect(SettingsFilePolicy.isWorldWritable(world), "world-writable file is rejected")
+        do {
+            _ = try SettingsFilePolicy.readJSON(at: world)
+            test.expect(false, "world-writable read must throw")
+        } catch let error as SettingsFilePolicy.LoadError {
+            test.expectEqual(error, .worldWritable, "world-writable error")
+        } catch {
+            test.expect(false, "unexpected import error: \(error)")
+        }
 
         let redacted = LogRedactor.redact("token=supersecrettokenvalue123\nsecond line")
         test.expect(redacted.contains("<redacted>"), "token redacted")

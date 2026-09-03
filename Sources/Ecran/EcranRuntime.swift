@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Domain
 import Foundation
 import Infrastructure
@@ -12,6 +11,7 @@ public final class EcranRuntime {
     var settings: AppSettings
     var accessibilityTrusted = false
     var screenRecordingGranted = false
+    var screenRecordingNeedsRelaunch = false
     var launchAtLoginEnabled = false
     var switcherIsOpen = false
     var frontmostBundleID: String?
@@ -27,10 +27,15 @@ public final class EcranRuntime {
     var onRepeatAppSwitcher: ((Bool) -> Void)?
     var onReleaseAppSwitcher: (() -> Void)?
     var onMenuBarVisibilityChanged: (() -> Void)?
+    var onNeedsAccessibility: (() -> Void)?
+    private var hadScreenRecordingAtLaunch: Bool?
+    private var watchingAccessibilityGrant = false
+    private var watchingScreenRecordingGrant = false
 
     var isFrontmostIgnored: Bool {
-        guard let frontmostBundleID else { return false }
-        return settings.isIgnored(frontmostBundleID)
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? frontmostBundleID
+        guard let bundleID else { return false }
+        return settings.isIgnored(bundleID)
     }
 
     init(store: JSONSettingsStore = JSONSettingsStore()) {
@@ -47,11 +52,7 @@ public final class EcranRuntime {
         bindHotkeys()
         reregisterHotkeys()
         observeFrontmostApp()
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshPermissions()
-            }
-        }
+        startPermissionPolling(interval: permissionPollInterval)
         AppLog.ui.info("\(AppIdentity.current.displayName) started")
     }
 
@@ -129,7 +130,7 @@ public final class EcranRuntime {
 
     func execute(_ action: WindowAction, source: ActionSource = .hotkey, element: AXUIElement? = nil) {
         guard accessibilityTrusted else {
-            AccessibilityAuthorization.request()
+            ensureAccessibility()
             return
         }
         if source == .hotkey, isFrontmostIgnored {
@@ -145,7 +146,7 @@ public final class EcranRuntime {
 
     func executeCycle(_ actions: [WindowAction]) {
         guard accessibilityTrusted else {
-            AccessibilityAuthorization.request()
+            ensureAccessibility()
             return
         }
         if isFrontmostIgnored { return }
@@ -182,22 +183,125 @@ public final class EcranRuntime {
         }
     }
 
-    func confirmURLTaskIfNeeded() -> Bool {
-        if NSWorkspace.shared.frontmostApplication == NSRunningApplication.current {
+    func confirmURLCommandIfNeeded(_ command: URLCommand) -> Bool {
+        guard URLCommandConfirmation.requiresPrompt(command.kind, confirmActions: settings.confirmURLActions) else {
             return true
         }
+        switch command.kind {
+        case .task:
+            return confirmURLCommand(
+                title: "Allow Ecran URL task?",
+                detail: "A URL asked Ecran to ignore or unignore an app."
+            )
+        case .action:
+            return confirmURLCommand(
+                title: "Allow Ecran URL action?",
+                detail: "A URL asked Ecran to move or resize a window."
+            )
+        case .settings:
+            return true
+        }
+    }
+
+    private func confirmURLCommand(title: String, detail: String) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Allow Ecran URL task?"
-        alert.informativeText = "A URL asked Ecran to ignore or unignore an app."
+        alert.messageText = title
+        alert.informativeText = detail
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }
 
     func refreshPermissions() {
+        let wasTrusted = accessibilityTrusted
         accessibilityTrusted = AccessibilityAuthorization.isTrusted
-        screenRecordingGranted = AccessibilityAuthorization.hasScreenRecording
+        let recording = AccessibilityAuthorization.hasScreenRecording
+        if hadScreenRecordingAtLaunch == nil {
+            hadScreenRecordingAtLaunch = recording
+        }
+        let access = ScreenRecordingAccess.resolve(
+            preflight: recording,
+            hadCaptureAtLaunch: hadScreenRecordingAtLaunch ?? recording
+        )
+        screenRecordingGranted = access.isGranted
+        screenRecordingNeedsRelaunch = access.needsRelaunch
+        if accessibilityTrusted {
+            watchingAccessibilityGrant = false
+        }
+        if screenRecordingGranted, !screenRecordingNeedsRelaunch {
+            watchingScreenRecordingGrant = false
+        }
+        if wasTrusted != accessibilityTrusted {
+            NotificationCenter.default.post(name: .permissionsDidChange, object: nil)
+        }
+        if permissionTimer != nil {
+            startPermissionPolling(interval: permissionPollInterval)
+        }
+    }
+
+    func ensureAccessibility() {
+        guard !accessibilityTrusted else { return }
+        AccessibilityAuthorization.requestWhileFrontmost()
+        watchingAccessibilityGrant = true
+        watchPermissionChanges()
+        onNeedsAccessibility?()
+    }
+
+    func grantAccessibility() {
+        watchingAccessibilityGrant = true
+        AccessibilityAuthorization.grantAccessibility()
+        watchPermissionChanges()
+    }
+
+    func grantScreenRecording() {
+        watchingScreenRecordingGrant = true
+        AccessibilityAuthorization.grantScreenRecording()
+        watchPermissionChanges()
+    }
+
+    func resetDevelopmentPermissions() {
+        _ = AccessibilityAuthorization.resetDevelopmentGrants()
+        AccessibilityAuthorization.relaunch()
+    }
+
+    func watchPermissionChanges() {
+        if !accessibilityTrusted {
+            watchingAccessibilityGrant = true
+        }
+        startPermissionPolling(interval: PermissionPolling.fast)
+    }
+
+    private var watchingPermissionGrant: Bool {
+        PermissionPolling.isWatching(
+            accessibilityTrusted: accessibilityTrusted,
+            watchingAccessibility: watchingAccessibilityGrant,
+            screenRecordingReady: screenRecordingGranted && !screenRecordingNeedsRelaunch,
+            watchingScreenRecording: watchingScreenRecordingGrant
+        )
+    }
+
+    private var permissionPollInterval: TimeInterval {
+        PermissionPolling.interval(
+            accessibilityTrusted: accessibilityTrusted,
+            watchingGrant: watchingPermissionGrant,
+            screenRecordingGranted: screenRecordingGranted,
+            needsRelaunch: screenRecordingNeedsRelaunch
+        )
+    }
+
+    private func startPermissionPolling(interval: TimeInterval) {
+        if permissionTimer?.timeInterval == interval, permissionTimer?.isValid == true {
+            return
+        }
+        permissionTimer?.invalidate()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainThreadHop.run {
+                self?.refreshPermissions()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        permissionTimer = timer
     }
 
     func snapIsEnabled() -> Bool {
@@ -224,19 +328,17 @@ public final class EcranRuntime {
     private func applyLaunchConfigIfPresent() {
         let url = AppIdentity.current.dataDirectory.appendingPathComponent("EcranConfig.json")
         guard FileManager.default.fileExists(atPath: url.path) else { return }
-        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
-        if let permissions = attributes?[.posixPermissions] as? NSNumber, permissions.intValue & 0o002 != 0 {
-            AppLog.ui.error("Ignored world-writable launch config")
-            return
+        do {
+            let data = try SettingsFilePolicy.readJSON(at: url)
+            let imported = try ConfigImportExport.importSettings(from: data, into: settings, titlesOnly: false)
+            applyImportedSettings(imported)
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            let archived = url.deletingLastPathComponent().appendingPathComponent("EcranConfig-\(stamp).json")
+            try? FileManager.default.moveItem(at: url, to: archived)
+            AppLog.ui.info("Applied launch configuration")
+        } catch {
+            AppLog.ui.error("Ignored launch config: \(error.localizedDescription)")
         }
-        guard let data = try? Data(contentsOf: url),
-              let imported = try? ConfigImportExport.importSettings(from: data, into: settings, titlesOnly: false)
-        else { return }
-        applyImportedSettings(imported)
-        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let archived = url.deletingLastPathComponent().appendingPathComponent("EcranConfig-\(stamp).json")
-        try? FileManager.default.moveItem(at: url, to: archived)
-        AppLog.ui.info("Applied launch configuration")
     }
 
     private func observeFrontmostApp() {
@@ -246,10 +348,11 @@ public final class EcranRuntime {
             queue: .main
         ) { [weak self] notification in
             let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            Task { @MainActor in
+            MainThreadHop.run {
                 guard let self else { return }
-                let previousIgnored = self.isFrontmostIgnored
+                let previousIgnored = self.frontmostBundleID.map { self.settings.isIgnored($0) } ?? false
                 self.frontmostBundleID = app?.bundleIdentifier
+                    ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
                 if previousIgnored != self.isFrontmostIgnored {
                     self.hotkeys.setPlacementEnabled(
                         FeatureIsolation.placementHotkeysEnabled(

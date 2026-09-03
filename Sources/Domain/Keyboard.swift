@@ -98,6 +98,15 @@ public struct KeyChord: Hashable, Codable, Sendable {
         self.modifierFlags = modifierFlags
     }
 
+    public var hasModifier: Bool {
+        modifierFlags & (
+            ModifierKey.command.eventModifierRawValue
+                | ModifierKey.option.eventModifierRawValue
+                | ModifierKey.control.eventModifierRawValue
+                | (1 << 17)
+        ) != 0
+    }
+
     public static func optionControl(_ keyCode: UInt16) -> KeyChord {
         KeyChord(keyCode: keyCode, modifierFlags: ModifierKey.option.eventModifierRawValue | ModifierKey.control.eventModifierRawValue)
     }

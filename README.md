@@ -44,7 +44,8 @@ for macOS 26 (universal).
   export and import JSON from Settings
 - **Window titles** — per-app extraction for the switcher list
 - **Menu bar** — launch at login, hide the icon, extra sizes, and URL actions
-  such as `ecran://execute-action?name=left-half`
+  such as `ecran://execute-action?name=left-half`. Ignore-list URL tasks
+  prompt first. Window-action URLs can optionally prompt from Settings.
 
 Recommended shortcuts are ⌃⌥ arrows for halves, ⌃⌥ U/I/J/K for corners, and
 ⌃⌥ Return to maximize.
@@ -53,7 +54,9 @@ Recommended shortcuts are ⌃⌥ arrows for halves, ⌃⌥ U/I/J/K for corners, 
 
 1. [Download the latest release](https://github.com/basique-industrie/ecran/releases).
 2. Unzip it and move **Ecran.app** to **Applications**.
-3. Open **Ecran**. Grant **Accessibility** when macOS asks.
+3. Open **Ecran**. Settings explains **Accessibility** (required) and
+   **Screen Recording** (optional live previews). Grant there — Ecran
+   opens the matching System Settings pane so you can flip the toggle.
 
 The notarized zip is signed. A local `scripts/package.sh` build is **Ecran Dev**:
 a different bundle ID, isolated settings, and a stable local signature so
@@ -74,6 +77,7 @@ That packages and opens **Ecran Dev** (`dist/Ecran Dev.app`). Leave the GitHub
 | --- | --- |
 | `./scripts/run.sh` | Package and open Ecran Dev |
 | `./scripts/run.sh --open-settings` | Open Settings on launch |
+| `./scripts/run.sh --reset-permissions` | Drop Dev Accessibility / Screen Recording grants |
 | `swift test` | Not used; the suite is a standalone executable |
 | `./scripts/test.sh` | Regression and security suites |
 | `./scripts/check-public-release.sh` | Public-release hygiene |

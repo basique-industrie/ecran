@@ -40,3 +40,13 @@ public struct URLCommand: Hashable, Sendable {
         }
     }
 }
+
+public enum URLCommandConfirmation: Sendable {
+    public static func requiresPrompt(_ kind: URLCommand.Kind, confirmActions: Bool) -> Bool {
+        switch kind {
+        case .settings: false
+        case .task: true
+        case .action: confirmActions
+        }
+    }
+}

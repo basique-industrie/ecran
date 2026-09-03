@@ -1,5 +1,16 @@
+import AppKit
 import Domain
 import SwiftUI
+
+@MainActor
+enum SettingsAlert {
+    static func show(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.runModal()
+    }
+}
 
 struct EcranToggle: View {
     @Binding var isOn: Bool
@@ -325,7 +336,9 @@ struct PermissionRow: View {
     let title: String
     let granted: Bool
     let required: Bool
+    var needsRelaunch: Bool = false
     let grant: () -> Void
+    var relaunch: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -343,14 +356,27 @@ struct PermissionRow: View {
             }
             Spacer(minLength: 8)
             StatusChip(
-                text: granted ? "Granted" : "Not granted",
-                emphasis: granted ? Color.white.opacity(0.82) : Color.orange.opacity(0.95)
+                text: statusTitle,
+                emphasis: statusEmphasis
             )
             if !granted {
                 QuietButton(title: "Grant", symbol: "lock.open", prominence: .primary, action: grant)
             }
+            if needsRelaunch, let relaunch {
+                QuietButton(title: "Restart", symbol: "arrow.clockwise", prominence: .primary, action: relaunch)
+            }
         }
         .padding(.vertical, 2)
+    }
+
+    private var statusTitle: String {
+        if needsRelaunch { return "Restart" }
+        return granted ? "Granted" : "Not granted"
+    }
+
+    private var statusEmphasis: Color {
+        if needsRelaunch { return Color.orange.opacity(0.95) }
+        return granted ? Color.white.opacity(0.82) : Color.orange.opacity(0.95)
     }
 }
 

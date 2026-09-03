@@ -47,8 +47,14 @@ public final class JSONSettingsStore: @unchecked Sendable {
         do {
             try saveThrowing(settings)
         } catch {
-            lock.withLock { storedErrorDescription = error.localizedDescription }
-            AppLog.settings.error("Settings write failed: \(error.localizedDescription)")
+            let message = error.localizedDescription
+            lock.withLock { storedErrorDescription = message }
+            AppLog.settings.error("Settings write failed: \(message)")
+            NotificationCenter.default.post(
+                name: .settingsStoreError,
+                object: nil,
+                userInfo: ["message": lastErrorDescription ?? message]
+            )
         }
     }
 
@@ -67,7 +73,7 @@ public final class JSONSettingsStore: @unchecked Sendable {
             return .default
         }
         do {
-            let data = try Data(contentsOf: fileURL)
+            let data = try SettingsFilePolicy.readJSON(at: fileURL)
             var document = try decodeDocument(data)
             let version = document["_schemaVersion"] as? Int ?? 0
             guard version <= Self.currentSchemaVersion else {
@@ -167,5 +173,6 @@ public final class JSONSettingsStore: @unchecked Sendable {
 public extension Notification.Name {
     static let settingsStoreError = Notification.Name("Ecran.settingsStoreError")
     static let settingsDidChange = Notification.Name("Ecran.settingsDidChange")
+    static let permissionsDidChange = Notification.Name("Ecran.permissionsDidChange")
     static let hotkeySettingsChanged = Notification.Name("Ecran.hotkeySettingsChanged")
 }

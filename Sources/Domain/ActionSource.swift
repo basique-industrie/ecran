@@ -26,6 +26,7 @@ public enum FeatureIsolation {
     }
 
     public static func switcherHotkeysEnabled(frontmostIgnored: Bool) -> Bool {
+        // Ignore list is a placement/snap gate. The switcher stays available.
         _ = frontmostIgnored
         return true
     }

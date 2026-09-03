@@ -12,9 +12,28 @@ final class SettingsController {
     private var window: NSWindow?
     private let runtime: EcranRuntime
     private let navigation = SettingsNavigation()
+    private var storeErrorObserver: NSObjectProtocol?
 
     init(runtime: EcranRuntime) {
         self.runtime = runtime
+        storeErrorObserver = NotificationCenter.default.addObserver(
+            forName: .settingsStoreError,
+            object: nil,
+            queue: .main
+        ) { notification in
+            let message = notification.userInfo?["message"] as? String
+                ?? "Ecran could not save settings."
+            MainThreadHop.run {
+                SettingsAlert.show(title: "Settings could not be saved", message: message)
+            }
+        }
+    }
+
+    func invalidate() {
+        if let storeErrorObserver {
+            NotificationCenter.default.removeObserver(storeErrorObserver)
+        }
+        storeErrorObserver = nil
     }
 
     func show() {

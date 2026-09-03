@@ -45,6 +45,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         snapController = SnapController(runtime: runtime)
         titleBarController = TitleBarController(runtime: runtime)
         greenButtonController = GreenButtonController(runtime: runtime)
+        runtime.onNeedsAccessibility = { [weak self] in
+            self?.showSettings()
+        }
         runtime.start()
         statusMenu = StatusMenuController(runtime: runtime) { [weak self] in
             self?.showSettings()
@@ -57,11 +60,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             forEventClass: AEEventClass(kInternetEventClass),
             andEventID: AEEventID(kAEGetURL)
         )
-        if CommandLine.arguments.contains("--open-settings") {
+        if CommandLine.arguments.contains("--open-settings") || !runtime.accessibilityTrusted {
             showSettings()
         }
         if !runtime.accessibilityTrusted {
-            AccessibilityAuthorization.request()
+            AccessibilityAuthorization.requestWhileFrontmost()
+            runtime.watchPermissionChanges()
         }
     }
 
@@ -76,6 +80,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         greenButtonController?.stop()
         statusMenu?.invalidate()
         statusMenu = nil
+        settingsController?.invalidate()
+        MenuBarIdentityIcon.invalidate()
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -107,11 +113,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         runtime?.toggleIgnoreFrontmostApp()
     }
 
-    public func isFrontmostIgnored() -> Bool {
-        guard let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else { return false }
-        return runtime?.settings.isIgnored(bundleID) ?? false
-    }
-
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
         guard let string = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: string),
@@ -121,7 +122,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             showSettings()
             return
         }
-        if case .task = command.kind, runtime?.confirmURLTaskIfNeeded() != true {
+        if runtime?.confirmURLCommandIfNeeded(command) != true {
             return
         }
         runtime?.handle(command)
@@ -134,7 +135,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            MainThreadHop.run {
                 self?.showSettings()
             }
         }

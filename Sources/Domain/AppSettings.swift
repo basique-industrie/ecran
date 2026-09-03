@@ -70,6 +70,7 @@ public struct AppSettings: Hashable, Codable, Sendable {
     public var footprintAlpha: Double
 
     public var ignoredBundleIDs: [String]
+    public var confirmURLActions: Bool
     public var ignoreDragSnapToo: Bool
     public var showAdditionalSizesInMenu: Bool
     public var doubleClickTitleBarAction: WindowAction?
@@ -162,6 +163,7 @@ public struct AppSettings: Hashable, Codable, Sendable {
         snapAreas = SnapAreaMap()
         footprintAlpha = 0.3
         ignoredBundleIDs = []
+        confirmURLActions = false
         ignoreDragSnapToo = true
         showAdditionalSizesInMenu = false
         doubleClickTitleBarAction = nil
@@ -253,7 +255,7 @@ public struct AppSettings: Hashable, Codable, Sendable {
         case moveCursorWithActions, centerHalfCycles, applyGapsToMaximize, applyGapsToMaximizeHeight
         case windowSnapping, unsnapRestore, animateFootprint, hapticFeedbackOnSnap
         case missionControlDragging, sixthsSnapArea, snapMargins, snapAreas, footprintAlpha
-        case ignoredBundleIDs, ignoreDragSnapToo, showAdditionalSizesInMenu, doubleClickTitleBarAction
+        case ignoredBundleIDs, confirmURLActions, ignoreDragSnapToo, showAdditionalSizesInMenu, doubleClickTitleBarAction
         case doubleClickTitleBarRestore, greenButtonOverride, todoMode, todoSide, todoWidth
         case todoIsFraction, todoBundleID, shortcuts
     }
@@ -373,6 +375,8 @@ public struct AppSettings: Hashable, Codable, Sendable {
         footprintAlpha = try container.decodeIfPresent(Double.self, forKey: .footprintAlpha) ?? defaults.footprintAlpha
         ignoredBundleIDs = try container.decodeIfPresent([String].self, forKey: .ignoredBundleIDs)
             ?? defaults.ignoredBundleIDs
+        confirmURLActions = try container.decodeIfPresent(Bool.self, forKey: .confirmURLActions)
+            ?? defaults.confirmURLActions
         ignoreDragSnapToo = try container.decodeIfPresent(Bool.self, forKey: .ignoreDragSnapToo)
             ?? defaults.ignoreDragSnapToo
         showAdditionalSizesInMenu = try container.decodeIfPresent(Bool.self, forKey: .showAdditionalSizesInMenu)
@@ -459,6 +463,7 @@ public struct AppSettings: Hashable, Codable, Sendable {
         try container.encode(snapAreas, forKey: .snapAreas)
         try container.encode(footprintAlpha, forKey: .footprintAlpha)
         try container.encode(ignoredBundleIDs, forKey: .ignoredBundleIDs)
+        try container.encode(confirmURLActions, forKey: .confirmURLActions)
         try container.encode(ignoreDragSnapToo, forKey: .ignoreDragSnapToo)
         try container.encode(showAdditionalSizesInMenu, forKey: .showAdditionalSizesInMenu)
         try container.encodeIfPresent(doubleClickTitleBarAction, forKey: .doubleClickTitleBarAction)

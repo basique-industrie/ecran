@@ -6,6 +6,21 @@ release title show that string with no leading `v`. Tags add the `v`.
 
 ## Unreleased
 
+### Changed
+
+- Accessibility and Screen Recording are requested while Ecran is frontmost
+  so they appear in the Privacy list, then opened on the matching System
+  Settings pane. Screen Recording offers a restart when macOS needs one.
+  Ecran Dev keeps a single Reset control for its own grants.
+- Screen Recording shows Restart only after a mid-session grant, not because
+  capture was missing at launch. Permission polling stays idle when
+  Accessibility is granted and Screen Recording is unused.
+- URL window actions stay silent by default for Shortcuts compatibility. A
+  Settings toggle can prompt before `ecran://execute-action` runs. Ignore-list
+  URL tasks always prompt, even when Settings is already frontmost. Settings
+  import and the local settings file reject world-writable or oversized JSON
+  and show an error. Shortcut recording requires a modifier key.
+
 ## 0.1.0-beta.1 - 2026-09-03
 
 ### Added

@@ -5,6 +5,7 @@ public enum EcranSelfTests {
     public static func run() async -> Int {
         let test = TestHarness()
         runIdentityAndSettingsTests(test)
+        runPermissionAuthorizationTests(test)
         runTitleExtractionTests(test)
         runWindowClassificationTests(test)
         runWindowLayoutTests(test)
