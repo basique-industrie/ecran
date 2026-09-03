@@ -6,6 +6,16 @@ release title show that string with no leading `v`. Tags add the `v`.
 
 ## Unreleased
 
+## 0.1.0-beta.1 - 2026-09-03
+
+### Added
+
+- Combined Lineup same-app and app switchers with Rectangle window actions,
+  snap areas, restore, multi-window arrange, URL commands, and JSON
+  configuration import/export.
+- Menu-bar accessory app with isolated **Ecran Dev** settings, redacted
+  support logs, and Iles-style release automation.
+
 ### Changed
 
 - Release notes describe Semantic Versioning without naming another project.
@@ -68,7 +78,6 @@ release title show that string with no leading `v`. Tags add the `v`.
   visible and the overlay stays horizontally centered.
 - Window moves now set size, then position, then size again and record the
   frame macOS actually applied, matching Rectangle’s resize path.
-
 - Ignore-app now disables only placement shortcuts and drag-snap, so the
   switcher still works in an ignored app. Menu, URL, title-bar, and green
   button actions still run.
@@ -79,13 +88,3 @@ release title show that string with no leading `v`. Tags add the `v`.
   todo window to the strip.
 - Switcher display style, color, header, number keys, follow-display, and
   modifier-release now apply at runtime.
-
-## 0.1.0-beta.1 - 2026-09-03
-
-### Added
-
-- Combined Lineup same-app and app switchers with Rectangle window actions,
-  snap areas, restore, multi-window arrange, URL commands, and JSON
-  configuration import/export.
-- Menu-bar accessory app with isolated **Ecran Dev** settings, redacted
-  support logs, and Iles-style release automation.
