@@ -1,0 +1,125 @@
+#!/bin/sh
+# Create or reuse a stable local code-signing identity.
+#
+# Ad-hoc signatures change CDHash on every package, so macOS TCC treats each
+# rebuild as a new app and asks for Accessibility again. Lineup keeps the grant
+# by signing "Lineup Dev" with the same Apple Development certificate every time.
+# This script prefers that, then Developer ID, then a self-signed identity stored
+# in ~/.ecran-dev/signing so the designated requirement stays the same.
+set -e
+
+CERT_NAME="Ecran Local Development"
+STORE="$HOME/.ecran-dev/signing"
+P12="$STORE/local-development.p12"
+CRT="$STORE/local-development.crt"
+PASSFILE="$STORE/local-development.pass"
+KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+
+print_identity() {
+  valid_only="$1"
+  needle="$2"
+  if [ "$valid_only" = "1" ]; then
+    identities=$(security find-identity -v -p codesigning 2>/dev/null || true)
+  else
+    identities=$(security find-identity -p codesigning 2>/dev/null || true)
+  fi
+  echo "$identities" | awk -v needle="$needle" 'index($0, needle) { print $2; exit }'
+}
+
+if [ -n "${ECRAN_SIGN_IDENTITY:-}" ]; then
+  echo "$ECRAN_SIGN_IDENTITY"
+  exit 0
+fi
+
+identity=$(print_identity 1 "Apple Development:")
+if [ -n "$identity" ]; then
+  echo "$identity"
+  exit 0
+fi
+
+identity=$(print_identity 1 "Developer ID Application:")
+if [ -n "$identity" ]; then
+  echo "$identity"
+  exit 0
+fi
+
+identity=$(print_identity 0 "$CERT_NAME")
+if [ -n "$identity" ]; then
+  echo "$identity"
+  exit 0
+fi
+
+mkdir -p "$STORE"
+chmod 700 "$STORE"
+
+if [ ! -f "$P12" ]; then
+  passphrase=$(/usr/bin/openssl rand -base64 24)
+  umask 077
+  printf '%s' "$passphrase" > "$PASSFILE"
+  chmod 600 "$PASSFILE"
+
+  work="$(mktemp -d "${TMPDIR:-/tmp}/Ecran-local-identity.XXXXXX")"
+  trap 'rm -rf "$work"' EXIT
+
+  cat > "$work/cert.cnf" <<EOF
+[ req ]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+x509_extensions = v3_code_sign
+
+[ dn ]
+CN = $CERT_NAME
+
+[ v3_code_sign ]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+EOF
+
+  /usr/bin/openssl req -new -x509 -days 3650 -nodes \
+    -config "$work/cert.cnf" \
+    -keyout "$work/key.pem" \
+    -out "$work/cert.pem" >/dev/null 2>&1
+  cp "$work/cert.pem" "$CRT"
+  chmod 600 "$CRT"
+
+  /usr/bin/openssl pkcs12 -export \
+    -inkey "$work/key.pem" \
+    -in "$work/cert.pem" \
+    -out "$P12" \
+    -passout "file:$PASSFILE" \
+    -name "$CERT_NAME" >/dev/null 2>&1
+  chmod 600 "$P12"
+  echo "Created local signing identity '$CERT_NAME' (TCC grants will survive rebuilds)." >&2
+  trap - EXIT
+  rm -rf "$work"
+fi
+
+if [ ! -f "$PASSFILE" ]; then
+  echo "Missing passphrase for $P12" >&2
+  exit 1
+fi
+
+if [ ! -f "$CRT" ]; then
+  /usr/bin/openssl pkcs12 -in "$P12" -passin "file:$PASSFILE" -nokeys -clcerts -out "$CRT" >/dev/null 2>&1
+  chmod 600 "$CRT"
+fi
+
+security import "$P12" \
+  -k "$KEYCHAIN" \
+  -P "$(cat "$PASSFILE")" \
+  -T /usr/bin/codesign \
+  -T /usr/bin/security \
+  >/dev/null 2>&1 || true
+
+security add-trusted-cert -d -r unspecified -p codeSign -k "$KEYCHAIN" "$CRT" >/dev/null 2>&1 || true
+
+identity=$(print_identity 0 "$CERT_NAME")
+if [ -z "$identity" ]; then
+  echo "Could not install local signing identity '$CERT_NAME'." >&2
+  exit 1
+fi
+
+echo "$identity"
